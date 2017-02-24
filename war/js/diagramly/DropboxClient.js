@@ -1,51 +1,17 @@
 /**
- * Copyright (c) 2006-2016, JGraph Ltd
- * Copyright (c) 2006-2016, Gaudenz Alder
- */
-/**
- * Constructs a new point for the optional x and y coordinates. If no
- * coordinates are given, then the default values for <x> and <y> are used.
- * @constructor
- * @class Implements a basic 2D point. Known subclassers = {@link mxRectangle}.
- * @param {number} x X-coordinate of the point.
- * @param {number} y Y-coordinate of the point.
+ * Copyright (c) 2006-2017, JGraph Ltd
+ * Copyright (c) 2006-2017, Gaudenz Alder
  */
 DropboxClient = function(editorUi)
 {
-	mxEventSource.call(this);
+	DrawioClient.call(this, editorUi, 'dbauth');
 	
-	/**
-	 * Holds the x-coordinate of the point.
-	 * @type number
-	 * @default 0
-	 */
-	this.ui = editorUi;
-
-	/**
-	 * Holds the x-coordinate of the point.
-	 * @type number
-	 * @default 0
-	 */
-	this.client = new Dropbox.Client(
-	{
-		key: App.DROPBOX_APPKEY,
-		sandbox: true
-	});
-	
-	/**
-	 * Holds the x-coordinate of the point.
-	 * @type number
-	 * @default 0
-	 */
-	this.client.authDriver(new Dropbox.AuthDriver.Popup(
-	{
-		rememberUser: true,
-		receiverUrl: 'https://' + window.location.host + '/dropbox.html'
-	}));
+	this.client = new Dropbox({clientId: App.DROPBOX_APPKEY});
+	this.client.setAccessToken(this.token);
 };
 
-// Extends mxEventSource
-mxUtils.extend(DropboxClient, mxEventSource);
+// Extends DrawioClient
+mxUtils.extend(DropboxClient, DrawioClient);
 
 /**
  * FIXME: How to find name of app folder for current user. The Apps part of the
@@ -61,60 +27,72 @@ DropboxClient.prototype.extension = '.html';
 /**
  * Executes the first step for connecting to Google Drive.
  */
-DriveClient.prototype.maxRetries = 4;
-
-/**
- * Executes the first step for connecting to Google Drive.
- */
-DropboxClient.prototype.user = null;
-
-/**
- * Executes the first step for connecting to Google Drive.
- */
 DropboxClient.prototype.writingFile = false;
+
+/**
+ * Executes the first step for connecting to Google Drive.
+ */
+DropboxClient.prototype.maxRetries = 4;
 
 /**
  * Authorizes the client, gets the userId and calls <open>.
  */
 DropboxClient.prototype.logout = function()
 {
-	this.client.signOut(mxUtils.bind(this, function()
+	this.client.authTokenRevoke().then(mxUtils.bind(this, function()
 	{
+		this.client.setAccessToken(null);
+		this.clearPersistentToken();
 		this.setUser(null);
+		this.token = null;
 	}));
-};
-
-/**
- * Authorizes the client, gets the userId and calls <open>.
- */
-DropboxClient.prototype.setUser = function(user)
-{
-	this.user = user;
-	this.fireEvent(new mxEventObject('userChanged'));
-};
-
-/**
- * Authorizes the client, gets the userId and calls <open>.
- */
-DropboxClient.prototype.getUser = function()
-{
-	return this.user;
 };
 
 /**
  * Checks if the client is authorized and calls the next step.
  */
-DropboxClient.prototype.updateUser = function(success, error, remember)
+DropboxClient.prototype.updateUser = function(success)
 {
-	this.client.getUserInfo(null, mxUtils.bind(this, function(error, info)
+	var acceptResponse = true;
+	
+	var timeoutThread = window.setTimeout(mxUtils.bind(this, function()
 	{
-		if (error == null)
+		acceptResponse = false;
+		this.ui.handleError({code: App.ERROR_TIMEOUT});
+	}), this.ui.timeout);
+	
+	var promise = this.client.usersGetCurrentAccount();
+	promise.then(mxUtils.bind(this, function(response)
+	{
+    	window.clearTimeout(timeoutThread);
+    	
+    	if (acceptResponse)
+    	{
+			this.setUser(new DrawioUser(response.account_id, response.email, response.name.display_name));
+			
+			if (success != null)
+			{
+				success();
+			}
+    	}
+	}));
+	// Workaround for IE8/9 support with catch function
+	promise['catch'](mxUtils.bind(this, function(err)
+	{
+		if (err != null && err.status === 401)
 		{
-			this.setUser(new DrawioUser(info.uid, info.email, info.name));
+			this.client.setAccessToken(null);
+			this.execute(success);
 		}
 		else
 		{
-			this.setUser(null);
+	    	window.clearTimeout(timeoutThread);
+	    	
+	    	if (acceptResponse)
+	    	{
+	    		this.setUser(null);
+	    		this.ui.handleError(err);
+	    	}
 		}
 	}));
 };
@@ -124,50 +102,36 @@ DropboxClient.prototype.updateUser = function(success, error, remember)
  */
 DropboxClient.prototype.execute = function(fn)
 {
-	if (this.client.isAuthenticated())
+	if (this.client.getAccessToken() != null)
 	{
-		fn();
+		if (this.user == null)
+		{
+			this.updateUser(fn);
+		}
+		else
+		{
+			fn();
+		}
 	}
 	else
 	{
-		this.authorize(false, mxUtils.bind(this, function(error, client)
+		this.ui.showAuthDialog(this, false, mxUtils.bind(this, function(remember, success)
 		{
-			if (error != null)
+			this.authenticate(mxUtils.bind(this, function()
 			{
-				this.ui.handleError(error);
-			}
-			else
-			{
-				if (this.client.isAuthenticated())
+				if (success != null)
 				{
-					this.updateUser();
-					fn();
+					success();
 				}
-				else
-				{
-					this.ui.showAuthDialog(this, false, mxUtils.bind(this, function(remember, success)
-					{
-						this.authorize(true, mxUtils.bind(this, function(error2, client)
-						{
-							if (error2 != null)
-							{
-								this.ui.handleError(error2);
-							}
-							else if (this.client.isAuthenticated())
-							{
-								this.updateUser();
-								
-								if (success != null)
-								{
-									success();
-								}
 
-								fn();
-							}
-						}));
+				if (this.client.getAccessToken() != null)
+				{
+					this.updateUser(fn, mxUtils.bind(this, function(err)
+					{
+						this.ui.handleError(e);
 					}));
 				}
-			}
+			}));
 		}));
 	}
 };
@@ -175,22 +139,39 @@ DropboxClient.prototype.execute = function(fn)
 /**
  * Authorizes the client, gets the userId and calls <open>.
  */
-DropboxClient.prototype.authorize = function(interactive, fn)
+DropboxClient.prototype.authenticate = function(fn)
 {
-	this.client.authenticate({interactive: interactive}, mxUtils.bind(this, function(error, client)
+	window.open(this.client.getAuthenticationUrl('https://' +
+		window.location.host + '/dropbox.html'), 'oauth');
+	
+	window.onDropboxCallback = mxUtils.bind(this, function(token, authWindow)
 	{
-		if (error != null)
+		try
 		{
-			if (window.console != null)
+			window.onDropboxCallback = null;
+	
+			if (authWindow != null)
 			{
-				console.log(error);
+				authWindow.close();
+			}
+			
+			if (token == null)
+			{
+				this.ui.hideDialog();
+				this.ui.handleError({message: mxResources.get('cannotLogin')});
+			}
+			else
+			{
+				this.client.setAccessToken(token);
+				this.setPersistentToken(token);
+				fn();
 			}
 		}
-		else
+		catch (e)
 		{
-			fn();
+			this.ui.handleError(e);
 		}
-	}));
+	});
 };
 
 /**
@@ -198,13 +179,13 @@ DropboxClient.prototype.authorize = function(interactive, fn)
  */
 DropboxClient.prototype.getLibrary = function(path, success, error)
 {
-	this.getFile(path, success, error, false, true);
+	this.getFile(path, success, error, true);
 };
 
 /**
  * DenyConvert is ignored in this client, just added for API compatibility.
  */
-DropboxClient.prototype.getFile = function(path, success, error, denyConvert, asLibrary)
+DropboxClient.prototype.getFile = function(path, success, error, asLibrary)
 {
 	asLibrary = (asLibrary != null) ? asLibrary : false;
 	
@@ -212,51 +193,28 @@ DropboxClient.prototype.getFile = function(path, success, error, denyConvert, as
 	{
 		this.execute(mxUtils.bind(this, function()
 		{
-			var acceptResponse = true;
-			
-			var timeoutThread = window.setTimeout(mxUtils.bind(this, function()
+			if (/^https:\/\//i.test(path) || /\.vsdx$/i.test(path) || /\.gliffy$/i.test(path) || /\.png$/i.test(path))
 			{
-				acceptResponse = false;
-				error({code: App.ERROR_TIMEOUT, retry: fn});
-			}), this.ui.timeout);
-			
-			var options = null;
-			
-			if (urlParams['rev'] != null)
-			{
-				options = {versionTag: urlParams['rev']};
+				var tokens = path.split('/');
+				var name = (tokens.length > 0) ? tokens[tokens.length - 1] : path;
+		
+				this.ui.convertFile(path, name, null, this.extension, success, error);
 			}
-			
-			this.client.readFile('/' + path, options, mxUtils.bind(this, function(err, data, stat)
+			else
 			{
-				try
+				var arg = {path: '/' + path};
+				
+				if (urlParams['rev'] != null)
 				{
-			    	window.clearTimeout(timeoutThread);
-			    	
-			    	if (acceptResponse)
-			    	{
-						if (err != null)
-						{
-							error(err)
-						}
-						else
-						{
-							if (asLibrary)
-							{
-								success(new DropboxLibrary(this.ui, data, stat));
-							}
-							else
-							{
-								success(new DropboxFile(this.ui, data, stat));
-							}
-						}
-			    	}
+					arg.rev = urlParams['rev'];
 				}
-				catch (e)
+				
+				this.readFile(arg, mxUtils.bind(this, function(data, response)
 				{
-					error(e);
-				}
-			}));
+		    		success((asLibrary) ? new DropboxLibrary(this.ui, data, response) :
+		    			new DropboxFile(this.ui, data, response));
+				}), error);
+			}
 		}));
 	});
 	
@@ -269,25 +227,101 @@ DropboxClient.prototype.getFile = function(path, success, error, denyConvert, as
  * @param {number} dx X-coordinate of the translation.
  * @param {number} dy Y-coordinate of the translation.
  */
-DropboxClient.prototype.checkExists = function(filename, fn)
+DropboxClient.prototype.readFile = function(arg, success, error)
 {
-	this.client.stat(filename, mxUtils.bind(this, function(err, stat)
+	var acceptResponse = true;
+	
+	var timeoutThread = window.setTimeout(mxUtils.bind(this, function()
 	{
-		if ((err != null && err.status == 404) || (stat != null && stat.isRemoved))
+		acceptResponse = false;
+		error({code: App.ERROR_TIMEOUT});
+	}), this.ui.timeout);
+	
+	// Workaround for Uncaught DOMException in filesDownload is to
+	// execute a checkExists in parallel to "catch" the file not found case
+	this.checkExists(arg.path.substring(1), mxUtils.bind(this, function(checked, exists)
+	{
+    	window.clearTimeout(timeoutThread);
+	    
+    	if (acceptResponse && !exists)
+    	{
+    		acceptResponse = false;
+			error({message: mxResources.get('fileNotFound')});
+    	}
+	}), true);
+	
+	// Download file in parallel
+	// LATER: Report Uncaught DOMException with path/not_found in filesDownload
+	var promise = this.client.filesDownload(arg);
+	promise.then(mxUtils.bind(this, function(response)
+	{
+    	window.clearTimeout(timeoutThread);
+	    
+    	if (acceptResponse)
+    	{
+    		acceptResponse = false;
+    		
+			try
+			{
+				var reader = new FileReader();
+				
+				reader.onload = mxUtils.bind(this, function(event)
+				{
+					success(reader.result, response);
+				});
+				
+				reader.readAsText(response.fileBlob);
+			}
+			catch (e)
+			{
+				error(e);
+			}
+    	}
+	}));
+	// Workaround for IE8/9 support with catch function
+	promise['catch'](function(err)
+	{
+    	window.clearTimeout(timeoutThread);
+	    
+    	if (acceptResponse)
+    	{
+    		acceptResponse = false;
+    		error(e);
+    	}
+	});
+};
+
+/**
+ * Translates this point by the given vector.
+ * 
+ * @param {number} dx X-coordinate of the translation.
+ * @param {number} dy Y-coordinate of the translation.
+ */
+DropboxClient.prototype.checkExists = function(filename, fn, noConfirm)
+{
+	var promise = this.client.filesGetMetadata({path: '/' + filename.toLowerCase(), include_deleted: false});
+	promise.then(mxUtils.bind(this, function(response)
+	{
+		if (noConfirm)
 		{
-			fn(true);
+			fn(false, true, response);
 		}
 		else
 		{
 			this.ui.confirm(mxResources.get('replaceIt', [filename]), function()
 			{
-				fn(true);
+				fn(true, true, response);
 			}, function()
 			{
-				fn(false);
+				fn(false, true, response);
 			});
 		}
 	}));
+	// Workaround for IE8/9 support with catch function
+	promise['catch'](function(err)
+	{
+		fn(true, false);
+	});
 };
 
 /**
@@ -298,37 +332,73 @@ DropboxClient.prototype.checkExists = function(filename, fn)
  */
 DropboxClient.prototype.renameFile = function(file, filename, success, error)
 {
-	if (file != null && filename != null)
+	if (/[\\\/:\?\*"\|]/.test(filename))
 	{
-		// Checks if file exists
-		this.execute(mxUtils.bind(this, function()
+		error({message: mxResources.get('dropboxCharsNotAllowed')});
+	}
+	else
+	{
+		// Appends working directory of source file
+		if (file != null && filename != null)
 		{
-			this.checkExists(filename, mxUtils.bind(this, function(checked)
+			var path = file.stat.path_display.substring(1);
+			var idx = path.lastIndexOf('/');
+			
+			if (idx > 0)
 			{
-				if (checked)
+				filename = path.substring(0, idx + 1) + filename;
+			}
+		}
+		
+		if (file != null && filename != null && file.stat.path_lower.substring(1) !== filename.toLowerCase())
+		{
+			// Checks if file exists
+			this.execute(mxUtils.bind(this, function()
+			{
+				this.checkExists(filename, mxUtils.bind(this, function(checked, exists, response)
 				{
-					// Uses write and remove because move does not allow overwriting an existing target
-					this.writeFile(filename, file.getData(), mxUtils.bind(this, function(stat)
+					if (checked)
 					{
-						this.client.remove(file.getTitle(), function(err2, stat2)
+						var thenHandler = mxUtils.bind(this, function(deleteResponse)
 						{
-							if (err2 != null)
+							// Uses write and remove because move does not allow overwriting an existing target
+							var move = this.client.filesMove({from_path: file.stat.path_display, to_path: '/' +
+								filename, autorename: false});
+							move.then(mxUtils.bind(this, function(response)
 							{
-								error(err2)
-							}
-							else
-							{
-								success(stat);
-							}
+								success(response);
+							}))
+							// Workaround for IE8/9 support with catch function
+							move['catch'](error);
 						});
-					}), error);
-				}
-				else
-				{
-					error();
-				}
+						
+						// API fails on same name with different upper-/lowercase
+						if (!exists || response.path_lower.substring(1) === filename.toLowerCase())
+						{
+							thenHandler();
+						}
+						else
+						{
+							// Deletes file first to avoid conflict in filesMove (non-atomic)
+							var promise = this.client.filesDelete({path: '/' + filename.toLowerCase()});
+							promise.then(thenHandler);
+							// Workaround for IE8/9 support with catch function
+							promise['catch'](error);
+						}
+					}
+					else
+					{
+						error();
+					}
+				}));
 			}));
-		}));
+		}
+		else
+		{
+			// Same name with different upper-/lowercase
+			// is not supported by Dropbox API
+			error({message: mxResources.get('invalidName')});
+		}
 	}
 };
 
@@ -408,11 +478,27 @@ DropboxClient.prototype.writeFile = function(filename, data, success, error)
 			error({message: mxResources.get('dropboxCharsNotAllowed')});
 		}
 	}
-	else if (!this.writingFile)
+	else if (data.length >= 150000000 /*150MB*/)
 	{
+		if (error != null)
+		{
+			error({message: mxResources.get('drawingTooLarge') + ' (' +
+				this.ui.formatFileSize(data.length) + ' / 150 MB)'});
+		}
+	}
+	else if (this.writingFile)
+	{
+		if (error != null)
+		{
+			error({code: App.ERROR_BUSY});
+		}
+	}
+	else
+	{
+		this.writingFile = true;
+		
 		var acceptResponse = true;
 		var timeoutThread = null;
-		this.writingFile = true;
 		var retryCount = 0;
 		
 		// Cancels any pending requests
@@ -439,44 +525,60 @@ DropboxClient.prototype.writeFile = function(filename, data, success, error)
 				}
 			}), this.ui.timeout);
 			
-			this.client.writeFile(filename, data, mxUtils.bind(this, function(err, stat)
+			var promise = this.client.filesUpload({path: '/' + filename, mode: {'.tag': 'overwrite'},
+				contents: new Blob([data], {type: 'text/plain'})});
+			promise.then(mxUtils.bind(this, function(response)
 			{
 		    	window.clearTimeout(timeoutThread);
-		    
+			    
 		    	if (acceptResponse)
 		    	{
-					if (err != null)
+					this.writingFile = false;
+					
+					try
 					{
-						if (retryCount < this.maxRetries)
+						if (success != null)
 						{
-							retryCount++;
-							var jitter = 1 + 0.1 * (Math.random() - 0.5);
-							this.requestThread = window.setTimeout(fn, Math.round(Math.pow(2, retryCount) * jitter * 1000));
+							success(response);
 						}
-						else if (error != null)
+					}
+					catch (e)
+					{
+						if (error != null)
 						{
-							this.writingFile = false;
-							error(err);
+							error(e);
 						}
+					}
+		    	}
+			}));
+			// Workaround for IE8/9 support with catch function
+			promise['catch'](mxUtils.bind(this, function(err)
+			{
+		    	window.clearTimeout(timeoutThread);
+			    
+		    	if (acceptResponse)
+				{
+		    		// LATER: Check error codes where a retry makes sense
+					if (retryCount < this.maxRetries)
+					{
+						retryCount++;
+						var jitter = 1 + 0.1 * (Math.random() - 0.5);
+						this.requestThread = window.setTimeout(fn, Math.round(Math.pow(2, retryCount) * jitter * 1000));
 					}
 					else
 					{
 						this.writingFile = false;
 						
-						if (success != null)
+						if (error != null)
 						{
-							success(stat);
+							error(err);
 						}
 					}
-		    	}
+				}
 			}));
 		});
 		
 		fn();
-	}
-	else if (error != null)
-	{
-		error({code: App.ERROR_BUSY});
 	}
 };
 
@@ -518,9 +620,9 @@ DropboxClient.prototype.pickLibrary = function(fn)
 					{		
 						var rel = decodeURIComponent(files[0].link.substring(tmp + this.appPath.length - 1));
 						
-						this.client.readFile(rel, null, mxUtils.bind(this, function(err, data, stat)
+						this.readFile({path: rel}, mxUtils.bind(this, function(data, stat)
 						{
-							if (stat != null && parseInt(files[0].bytes) === parseInt(stat.size) && rel === stat.path)
+							if (stat != null && parseInt(files[0].bytes) === parseInt(stat.size) && rel === stat.path_display)
 							{
 								// No need to load file a second time
 								try
@@ -537,7 +639,7 @@ DropboxClient.prototype.pickLibrary = function(fn)
 							{
 								this.createLibrary(files[0], fn, error);
 							}
-						}));
+						}), error);
 					}));
 				}
 				else
@@ -595,7 +697,7 @@ DropboxClient.prototype.pickFile = function(fn, readOnly)
 	{
 		fn = (fn != null) ? fn : mxUtils.bind(this, function(path, file)
 		{
-			this.ui.loadFile('D' + encodeURIComponent(path), null, file);
+			this.ui.loadFile((path != null) ? 'D' + encodeURIComponent(path) : file.getHash(), null, file);
 		});
 		
 		// Authentication will be carried out on open to make sure the
@@ -631,39 +733,47 @@ DropboxClient.prototype.pickFile = function(fn, readOnly)
 							this.ui.spinner.stop();
 							fn(path, file);
 						});
-				
-						var tmp = files[0].link.indexOf(this.appPath);
-	
-						if (tmp > 0 && !/(\.png)$/i.test(files[0].name) && !/(\.vs?dx)$/i.test(files[0].name) && !/(\.gliffy)$/i.test(files[0].name))
+						
+						if ((/\.vsdx$/i.test(files[0].name) || /\.gliffy$/i.test(files[0].name) ||
+							/\.png$/i.test(files[0].name)))
 						{
-							// Checks if file is in app folder by loading file from there and comparing relative path and size
-							// KNOWN: This check fails if a file is inside a drawio directory with same relative path and size
-							this.execute(mxUtils.bind(this, function()
-							{		
-								var rel = decodeURIComponent(files[0].link.substring(tmp + this.appPath.length - 1));
-								
-								this.client.readFile(rel, null, mxUtils.bind(this, function(err, data, stat)
-								{
-									if (stat != null && parseInt(files[0].bytes) === parseInt(stat.size) && rel === stat.path)
-									{
-										this.ui.spinner.stop();
-										
-										// No need to load file a second time
-										fn(rel.substring(1), new DropboxFile(this.ui, data, stat));
-									}
-									else
-									{
-										this.createFile(files[0], success, error);
-									}
-								}));
-							}));
+							success(files[0].link);
 						}
 						else
 						{
-							this.execute(mxUtils.bind(this, function()
+							var tmp = files[0].link.indexOf(this.appPath);
+							
+							if (tmp > 0)
 							{
-								this.createFile(files[0], success, error);
-							}));
+								// Checks if file is in app folder by loading file from there and comparing relative path and size
+								// KNOWN: This check fails if a file is inside a drawio directory with same relative path and size
+								this.execute(mxUtils.bind(this, function()
+								{		
+									var rel = decodeURIComponent(files[0].link.substring(tmp + this.appPath.length - 1));
+									
+									this.readFile({path: rel}, mxUtils.bind(this, function(data, stat)
+									{
+										if (stat != null && parseInt(files[0].bytes) === parseInt(stat.size) && rel === stat.path_display)
+										{
+											this.ui.spinner.stop();
+											
+											// No need to load file a second time
+											fn(rel.substring(1), new DropboxFile(this.ui, data, stat));
+										}
+										else
+										{
+											this.createFile(files[0], success, error);
+										}
+									}), error);
+								}));
+							}
+							else
+							{
+								this.execute(mxUtils.bind(this, function()
+								{
+									this.createFile(files[0], success, error);
+								}));
+							}
 						}
 					}
 				}
@@ -684,70 +794,28 @@ DropboxClient.prototype.pickFile = function(fn, readOnly)
  */
 DropboxClient.prototype.createFile = function(file, success, error)
 {
-	var name = file.name;
-	
-	if (/(\.png)$/i.test(name) || /(\.vs?dx)$/i.test(name) || /(\.gliffy)$/i.test(name))
-	{
-		name = name.substring(0, name.lastIndexOf('.')) + this.extension;
-	}
-	
-	var doInsert = mxUtils.bind(this, function(filename, data)
-	{
-		this.ui.confirm(mxResources.get('note') + ': ' + mxResources.get('fileWillBeSavedInAppFolder', [filename]), mxUtils.bind(this, function()
-		{
-			this.insertFile(filename, data, mxUtils.bind(this, function(newFile)
-	    	{
-				success(filename, newFile);
-	    	}), error);
-		}), mxUtils.bind(this, function()
-		{
-    		this.ui.spinner.stop();
-		}));
-	});
-	
 	this.ui.loadUrl(file.link, mxUtils.bind(this, function(data)
     {
-		if (/(\.vs?dx)$/i.test(file.name) || /(\.gliffy)$/i.test(file.name))
+		if (data != null && data.length > 0)
 		{
-			this.ui.parseFile(new Blob([data], {type: 'application/octet-stream'}), mxUtils.bind(this, function(xhr)
+			this.ui.confirm(mxResources.get('note') + ': ' + mxResources.get('fileWillBeSavedInAppFolder', [file.name]), mxUtils.bind(this, function()
 			{
-				if (xhr.readyState == 4)
-				{
-					if (xhr.status == 200 && xhr.responseText.substring(0, 13) == '<mxGraphModel')
-					{
-						doInsert(name, xhr.responseText);
-					}
-					else
-					{
-			    		this.ui.spinner.stop();
-			    		
-			    		if (error != null)
-			    		{
-			    			error({message: mxResources.get('errorLoadingFile')});
-			    		}
-					}
-				}
-			}), file.name);
+				this.insertFile(file.name, data, mxUtils.bind(this, function(newFile)
+		    	{
+					success(file.name, newFile);
+		    	}), error);
+			}), mxUtils.bind(this, function()
+			{
+	    		this.ui.spinner.stop();
+			}));
 		}
 		else
 		{
-			if (/(\.png)$/i.test(file.name))
-			{
-				data = this.ui.extractGraphModelFromPng(data);
-			}
+			this.ui.spinner.stop();
 			
-			if (data != null && data.length > 0)
+			if (error != null)
 			{
-				doInsert(name, data);
-			}
-			else
-			{
-				this.ui.spinner.stop();
-				
-				if (error != null)
-				{
-					error({message: mxResources.get('errorLoadingFile')});
-				}
+				error({message: mxResources.get('errorLoadingFile')});
 			}
 		}
     }), error, /(\.png)$/i.test(file.name));

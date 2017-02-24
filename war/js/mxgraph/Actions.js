@@ -70,7 +70,7 @@ Actions.prototype.init = function()
 	}).isEnabled = isGraphEnabled;
 	this.addAction('save', function() { ui.saveFile(false); }, null, null, 'Ctrl+S').isEnabled = isGraphEnabled;
 	this.addAction('saveAs...', function() { ui.saveFile(true); }, null, null, 'Ctrl+Shift+S').isEnabled = isGraphEnabled;
-	this.addAction('export...', function() { ui.showDialog(new ExportDialog(ui).container, 300, 210, true, true); });
+	this.addAction('export...', function() { ui.showDialog(new ExportDialog(ui).container, 300, 230, true, true); });
 	this.addAction('editDiagram...', function()
 	{
 		var dlg = new EditDiagramDialog(ui);
@@ -440,25 +440,31 @@ Actions.prototype.init = function()
 		    	if (state.style['html'] == '1')
 		    	{
 		    		value = null;
-		    		
-					// Removes newlines from HTML and converts breaks to newlines
-					// to match the HTML output in plain text
-					if (mxUtils.getValue(state.style, 'nl2Br', '1') != '0')
-					{
-						graph.cellLabelChanged(state.cell, graph.convertValueToString(state.cell).
-							replace(/\n/g, '').replace(/<br\s*.?>/g, '\n'));
-					}
-		    	}
-		    	else
-		    	{
-		    		// FIXME: HTML entities are converted in plain text labels if word wrap is on
-		    		// TODO: Convert HTML entities? (Check for userobject!)
-					// Converts newlines in plain text to breaks in HTML
-					// to match the plain text output
 		    		var label = graph.convertValueToString(state.cell);
 		    		
 		    		if (mxUtils.getValue(state.style, 'nl2Br', '1') != '0')
 					{
+						// Removes newlines from HTML and converts breaks to newlines
+						// to match the HTML output in plain text
+						label = label.replace(/\n/g, '').replace(/<br\s*.?>/g, '\n');
+					}
+		    		
+		    		// Removes HTML tags
+	    			var temp = document.createElement('div');
+	    			temp.innerHTML = label;
+	    			label = mxUtils.extractTextWithWhitespace(temp.childNodes);
+	    			
+					graph.cellLabelChanged(state.cell, label);
+		    	}
+		    	else
+		    	{
+		    		// Converts HTML tags to text
+		    		var label = mxUtils.htmlEntities(graph.convertValueToString(state.cell), false);
+		    		
+		    		if (mxUtils.getValue(state.style, 'nl2Br', '1') != '0')
+					{
+						// Converts newlines in plain text to breaks in HTML
+						// to match the plain text output
 		    			label = label.replace(/\n/g, '<br/>');
 					}
 		    		

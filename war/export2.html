@@ -29,8 +29,9 @@
 		{
 			var graph = new Graph(document.getElementById('graph'));
 			data.border = parseInt(data.border) || 0;
-			data.w = parseInt(data.w) || 0;
-			data.h = parseInt(data.h) || 0;
+			data.w = parseFloat(data.w) || 0;
+			data.h = parseFloat(data.h) || 0;
+			data.scale = parseFloat(data.scale) || 1;
 			
 			// Parses XML
 			var xmlDoc = mxUtils.parseXml(data.xml);
@@ -194,12 +195,15 @@
 				// Floor is needed to keep rendering crisp
 				if (data.w > 0 && data.h > 0)
 				{
-					graph.view.scaleAndTranslate(Math.min(data.w / b.width, data.h / b.height),
-						Math.floor(-b.x + data.border), Math.floor(-b.y + data.border));
+					var s = Math.min(data.w / b.width, data.h / b.height);
+					graph.view.scaleAndTranslate(s,
+						Math.floor(data.border / s - b.x),
+						Math.floor(data.border / s - b.y));
 				}
 				else
 				{
-					graph.view.setTranslate(Math.floor(-b.x + data.border), Math.floor(-b.y + data.border));
+					graph.view.scaleAndTranslate(data.scale, Math.floor(data.border - b.x),
+						Math.floor(data.border - b.y));
 				}
 			}
 			else
@@ -221,9 +225,9 @@
 			
 			// Gets the diagram bounds and sets the document size
 			var bounds = (graph.pdfPageVisible) ? graph.view.getBackgroundPageBounds() : graph.getGraphBounds();
-			bounds.width += data.border;
-			bounds.height += data.border;
-
+			bounds.width = Math.ceil(bounds.width + data.border);
+			bounds.height = Math.ceil(bounds.height + data.border);
+			
 			// Waits for all images to finish loading
 			var cache = new Object();
 			var waitCounter = 1;

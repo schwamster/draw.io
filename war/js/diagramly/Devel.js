@@ -11,7 +11,6 @@ mxscript(drawDevUrl + 'js/spin/spin.min.js');
 mxscript(drawDevUrl + 'js/deflate/pako.min.js');
 mxscript(drawDevUrl + 'js/deflate/base64.js');
 mxscript(drawDevUrl + 'js/sanitizer/sanitizer.min.js');
-mxscript(drawDevUrl + 'js/dropbox/dropbox.min.js');
 
 // Uses grapheditor from devhost
 mxscript(geBasePath +'/Editor.js');
@@ -57,6 +56,7 @@ mxscript(drawDevUrl + 'js/diagramly/sidebar/Sidebar-PID.js');
 mxscript(drawDevUrl + 'js/diagramly/sidebar/Sidebar-Rack.js');
 mxscript(drawDevUrl + 'js/diagramly/sidebar/Sidebar-Sysml.js');
 mxscript(drawDevUrl + 'js/diagramly/sidebar/Sidebar-Veeam.js');
+mxscript(drawDevUrl + 'js/diagramly/sidebar/Sidebar-WebIcons.js');
 
 mxscript(drawDevUrl + 'js/diagramly/util/mxJsCanvas.js');
 mxscript(drawDevUrl + 'js/diagramly/util/mxAsyncCanvas.js');
@@ -72,6 +72,7 @@ mxscript(drawDevUrl + 'js/diagramly/EditorUi.js');
 mxscript(drawDevUrl + 'js/diagramly/Settings.js');
 
 // Excluded in base.min.js
+mxscript(drawDevUrl + 'js/diagramly/DrawioClient.js');
 mxscript(drawDevUrl + 'js/diagramly/DrawioUser.js');
 mxscript(drawDevUrl + 'js/diagramly/UrlLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/DriveRealtime.js');
@@ -82,6 +83,9 @@ mxscript(drawDevUrl + 'js/diagramly/DriveClient.js');
 mxscript(drawDevUrl + 'js/diagramly/DropboxFile.js');
 mxscript(drawDevUrl + 'js/diagramly/DropboxLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/DropboxClient.js');
+mxscript(drawDevUrl + 'js/diagramly/GitHubFile.js');
+mxscript(drawDevUrl + 'js/diagramly/GitHubLibrary.js');
+mxscript(drawDevUrl + 'js/diagramly/GitHubClient.js');
 mxscript(drawDevUrl + 'js/diagramly/OneDriveFile.js');
 mxscript(drawDevUrl + 'js/diagramly/OneDriveLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/OneDriveClient.js');

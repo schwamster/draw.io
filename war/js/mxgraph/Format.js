@@ -35,10 +35,7 @@ Format.prototype.init = function()
 	graph.getSelectionModel().addListener(mxEvent.CHANGE, this.update);
 	graph.addListener(mxEvent.EDITING_STARTED, this.update);
 	graph.addListener(mxEvent.EDITING_STOPPED, this.update);
-	graph.getModel().addListener(mxEvent.CHANGE, mxUtils.bind(this, function()
-	{
-		this.clearSelectionState();
-	}));
+	graph.getModel().addListener(mxEvent.CHANGE, this.update);
 	graph.addListener(mxEvent.ROOT, mxUtils.bind(this, function()
 	{
 		this.refresh();
@@ -1421,9 +1418,13 @@ ArrangePanel.prototype.init = function()
 	// Special case that adds two panels
 	this.addGeometry(this.container);
 	this.addEdgeGeometry(this.container);
-	this.container.appendChild(this.addAngle(this.createPanel()));
 
-	if (!ss.containsLabel)
+	if (!ss.containsLabel || ss.edges.length == 0)
+	{
+		this.container.appendChild(this.addAngle(this.createPanel()));
+	}
+	
+	if (!ss.containsLabel && ss.edges.length == 0)
 	{
 		this.container.appendChild(this.addFlip(this.createPanel()));
 	}
@@ -1720,18 +1721,25 @@ ArrangePanel.prototype.addAngle = function(div)
 	span.style.width = '70px';
 	span.style.marginTop = '0px';
 	span.style.fontWeight = 'bold';
-	mxUtils.write(span, mxResources.get('angle'));
-	div.appendChild(span);
 	
+	var input = null;
 	var update = null;
-	var input = this.addUnitInput(div, '°', 84, 44, function()
+	var btn = null;
+	
+	if (ss.edges.length == 0)
 	{
-		update.apply(this, arguments);
-	});
+		mxUtils.write(span, mxResources.get('angle'));
+		div.appendChild(span);
+		
+		input = this.addUnitInput(div, '°', (!ss.containsLabel) ? 84 : 20, 44, function()
+		{
+			update.apply(this, arguments);
+		});
+	}
 
 	if (!ss.containsLabel)
 	{
-		var btn = mxUtils.button(mxResources.get('turn'), function(evt)
+		btn = mxUtils.button(mxResources.get('turn'), function(evt)
 		{
 			ui.actions.get('turn').funct();
 		})
@@ -1743,23 +1751,34 @@ ArrangePanel.prototype.addAngle = function(div)
 		btn.style.width = '61px';
 		div.appendChild(btn);
 	}
-
-	var listener = mxUtils.bind(this, function(sender, evt, force)
+	
+	if (input == null)
 	{
-		if (force || document.activeElement != input)
+		if (btn != null)
 		{
-			ss = this.format.getSelectionState();
-			var tmp = parseFloat(mxUtils.getValue(ss.style, mxConstants.STYLE_ROTATION, 0));
-			input.value = (isNaN(tmp)) ? '' : tmp  + '°';
+			btn.style.right = '';
+			btn.style.width = '202px';
 		}
-	});
-
-	update = this.installInputHandler(input, mxConstants.STYLE_ROTATION, 0, 0, 360, '°', null, true);
-	this.addKeyHandler(input, listener);
-
-	graph.getModel().addListener(mxEvent.CHANGE, listener);
-	this.listeners.push({destroy: function() { graph.getModel().removeListener(listener); }});
-	listener();
+	}
+	else
+	{
+		var listener = mxUtils.bind(this, function(sender, evt, force)
+		{
+			if (force || document.activeElement != input)
+			{
+				ss = this.format.getSelectionState();
+				var tmp = parseFloat(mxUtils.getValue(ss.style, mxConstants.STYLE_ROTATION, 0));
+				input.value = (isNaN(tmp)) ? '' : tmp  + '°';
+			}
+		});
+	
+		update = this.installInputHandler(input, mxConstants.STYLE_ROTATION, 0, 0, 360, '°', null, true);
+		this.addKeyHandler(input, listener);
+	
+		graph.getModel().addListener(mxEvent.CHANGE, listener);
+		this.listeners.push({destroy: function() { graph.getModel().removeListener(listener); }});
+		listener();
+	}
 
 	return div;
 };
@@ -2389,7 +2408,7 @@ TextFormatPanel.prototype.addFont = function(container)
 	dirSelect.style.marginTop = '-2px';
 
 	// NOTE: For automatic we use the value null since automatic
-	// requires the text to be non formatted and non-wrappedto
+	// requires the text to be non formatted and non-wrapped
 	var dirs = ['automatic', 'leftToRight', 'rightToLeft'];
 	var dirSet = {'automatic': null,
 			'leftToRight': mxConstants.TEXT_DIRECTION_LTR,

@@ -1,14 +1,6 @@
 /**
- * Copyright (c) 2006-2016, JGraph Ltd
- * Copyright (c) 2006-2016, Gaudenz Alder
- */
-/**
- * Constructs a new point for the optional x and y coordinates. If no
- * coordinates are given, then the default values for <x> and <y> are used.
- * @constructor
- * @class Implements a basic 2D point. Known subclassers = {@link mxRectangle}.
- * @param {number} x X-coordinate of the point.
- * @param {number} y Y-coordinate of the point.
+ * Copyright (c) 2006-2017, JGraph Ltd
+ * Copyright (c) 2006-2017, Gaudenz Alder
  */
 OneDriveClient = function(editorUi)
 {
@@ -123,7 +115,7 @@ OneDriveClient.prototype.execute = function(fn, userEvent)
 	}
 	else
 	{
-		var next = mxUtils.bind(this, function(newToken)
+		var next = mxUtils.bind(this, function(newToken, cb)
 		{
 			if (newToken != null && newToken.length > 0)
 			{
@@ -135,8 +127,13 @@ OneDriveClient.prototype.execute = function(fn, userEvent)
 					// Gets the user data to display a logout button in the UI
 					mxUtils.get(this.baseUrl + '/drive?access_token=' + newToken, mxUtils.bind(this, function(req)
 					{
-						if (req.getStatus() == 200)
+						if (req.getStatus() >= 200 && req.getStatus() <= 299)
 						{
+							if (cb != null)
+							{
+								cb();
+							}
+							
 							var data = JSON.parse(req.getText());
 							this.setUser(new DrawioUser(data.owner.user.id, null, data.owner.user.displayName));
 							fn(newToken);
@@ -162,11 +159,11 @@ OneDriveClient.prototype.execute = function(fn, userEvent)
 		
 		if (token != null && token.length > 0)
 		{
-			next(token);
+			next(token, null);
 		}
 		else
 		{
-			var auth = mxUtils.bind(this, function()
+			var auth = mxUtils.bind(this, function(cb)
 			{
 				var url = 'https://login.live.com/oauth20_authorize.srf?client_id=' + this.clientId +
 					'&scope=' + encodeURIComponent(this.scopes) + '&response_type=token' +
@@ -201,7 +198,7 @@ OneDriveClient.prototype.execute = function(fn, userEvent)
 							authWindow.close();
 						}
 	
-						next(newToken);
+						next(newToken, cb);
 					});
 	
 					popup.focus();
@@ -217,12 +214,7 @@ OneDriveClient.prototype.execute = function(fn, userEvent)
 				// Requires a user event to about popups being blocked
 				this.ui.showAuthDialog(this, false, mxUtils.bind(this, function(remember, success)
 				{
-					if (success != null)
-					{
-						success();
-					}
-					
-					auth();
+					auth(success);
 				}));
 			}
 		}
@@ -277,15 +269,16 @@ OneDriveClient.prototype.getFile = function(id, success, error, denyConvert, asL
 			    	
 			    	if (acceptResponse)
 			    	{
-			    		if (req.getStatus() == 200)
+			    		if (req.getStatus() >= 200 && req.getStatus() <= 299)
 			    		{
 							var meta = JSON.parse(req.getText());
-
-							if (!denyConvert && Graph.fileSupport && new XMLHttpRequest().upload &&
-								(/(\.png)$/i.test(meta.name) || /(\.vs?dx)$/i.test(meta.name) ||
-								/(\.gliffy)$/i.test(meta.name)))
+							
+							// Handles .vsdx, Gliffy and PNG+XML files by creating a temporary file
+							if ((/\.vsdx$/i.test(meta.name) || /\.gliffy$/i.test(meta.name) || /\.png$/i.test(meta.name)))
 							{
-								this.convertFile(meta, success, error);
+								var mimeType = (meta.file != null) ? meta.file.mimeType : null;
+								this.ui.convertFile(meta['@content.downloadUrl'], meta.name, mimeType,
+									this.extension, success, error);
 							}
 							else
 							{
@@ -299,7 +292,8 @@ OneDriveClient.prototype.getFile = function(id, success, error, denyConvert, asL
 									{
 										success(new OneDriveFile(this.ui, data, meta));
 									}
-					    		}), err, meta.file.mimeType == 'image/png');
+					    		}), err, meta.file != null && meta.file.mimeType != null &&
+					    			meta.file.mimeType.substring(0, 6) == 'image/');
 							}
 			    		}
 			    		else if (error != null)
@@ -354,7 +348,7 @@ OneDriveClient.prototype.convertFile = function(meta, success, error)
 			{
 				if (xhr.readyState == 4)
 				{
-					if (xhr.status == 200 && xhr.responseText.substring(0, 13) == '<mxGraphModel')
+					if (xhr.status >= 200 && xhr.status <= 299 && xhr.responseText.substring(0, 13) == '<mxGraphModel')
 					{
 						this.insertFile(name, xhr.responseText, success, error);
 					}
@@ -578,7 +572,7 @@ OneDriveClient.prototype.writeFile = function(url, data, method, contentType, su
 						this.writingFile = false;
 						
 						// Returns 201 (created) for new resources
-			    		if (req.getStatus() == 200 || req.getStatus() == 201)
+			    		if (req.getStatus() >= 200 && req.getStatus() <= 299)
 			    		{
 			    			if (success != null)
 			    			{

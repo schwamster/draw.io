@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title></title>
+	</head>
+	<body>
+		<script>
+			try
+			{
+				if (window.opener != null && window.opener.onGitHubCallback != null)
+				{
+					var search = window.location.search;
+					var idx1 = search.indexOf('code=');
+					var code = null;
+					
+					if (idx1 >= 0)
+					{
+						code = search.substring(idx1 + 5);
+					}
+
+					// Continues execution of main program flow
+					window.opener.onGitHubCallback(code, window);
+				}
+			}
+			catch (e)
+			{
+				// ignore
+			}
+		</script>
+	</body>
+</html>

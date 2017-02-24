@@ -1101,23 +1101,19 @@ GraphViewer.prototype.addToolbar = function()
  */
 GraphViewer.prototype.addClickHandler = function(graph, ui)
 {
-	var isBlankLink = graph.isBlankLink;
-	var config = this.graphConfig;
-	
-	graph.isBlankLink = function(href)
-	{
-		return config.target != 'self' && isBlankLink.apply(this, arguments);
-	};
+	graph.linkPolicy = this.graphConfig.target || graph.linkPolicy;
 	
 	graph.addClickHandler(this.graphConfig.highlight, function(evt)
 	{
+		// Hides lightbox if any links are clicked
 		if (ui != null)
 		{
 			ui.destroy();
 		}
 	}, mxUtils.bind(this, function(evt)
 	{
-		if (ui == null && this.lightboxClickEnabled && (!mxEvent.isTouchEvent(evt) ||
+		if (ui == null && this.lightboxClickEnabled &&
+			(!mxEvent.isTouchEvent(evt) ||
 			this.toolbarItems.length == 0))
 		{
 			this.showLightbox();
@@ -1148,13 +1144,13 @@ GraphViewer.prototype.showLightbox = function()
 			});
 			
 			mxEvent.addListener(window, 'message', receive);
-			wnd = window.open('https://www.draw.io/?client=1&chrome=0&lightbox=1&close=1&edit=_blank' + p);
+			wnd = window.open('https://www.draw.io/?client=1&lightbox=1&close=1&edit=_blank' + p);
 		}
 		else
 		{
 			// Data is pulled from global variable after tab loads
 			window.drawdata = this.xml;
-			window.open('https://www.draw.io/?client=1&chrome=0&lightbox=1&edit=_blank' + p);
+			window.open('https://www.draw.io/?client=1&lightbox=1&edit=_blank' + p);
 		}
 	}
 	else
@@ -1258,7 +1254,12 @@ GraphViewer.prototype.showLocalLightbox = function()
 		
 		if (ui.pages != null && ui.currentPage != null)
 		{
-			param = '&page=' + mxUtils.indexOf(ui.pages, ui.currentPage);
+			var pageIndex = mxUtils.indexOf(ui.pages, ui.currentPage);
+		
+			if (pageIndex > 0)
+			{
+				param = '&page=' + pageIndex;
+			}
 		}
 		
 		return editorGetEditBlankUrl.apply(this, arguments) + param;
@@ -1560,20 +1561,32 @@ GraphViewer.initCss = function()
 };
 
 /**
+ * Lookup for URLs.
+ */
+GraphViewer.cachedUrls = {};
+
+/**
  * Workaround for unsupported CORS in IE9 XHR
  */
 GraphViewer.getUrl = function(url, onload, onerror)
 {
-	var xhr = (navigator.userAgent.indexOf('MSIE 9') > 0) ? new XDomainRequest() : new XMLHttpRequest();
-	xhr.open('GET', url);
-	
-    xhr.onload = function()
-    {
-    	onload((xhr.getText != null) ? xhr.getText() : xhr.responseText);
-	};
-	
-    xhr.onerror = onerror;
-    xhr.send();
+	if (GraphViewer.cachedUrls[url] != null)
+	{
+		onload(GraphViewer.cachedUrls[url]);
+	}
+	else
+	{
+		var xhr = (navigator.userAgent.indexOf('MSIE 9') > 0) ? new XDomainRequest() : new XMLHttpRequest();
+		xhr.open('GET', url);
+		
+	    xhr.onload = function()
+	    {
+	    	onload((xhr.getText != null) ? xhr.getText() : xhr.responseText);
+		};
+		
+	    xhr.onerror = onerror;
+	    xhr.send();
+	}
 };
 
 /**

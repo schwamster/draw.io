@@ -107,6 +107,7 @@
 				<file name="Sidebar-Rack.js" />
 				<file name="Sidebar-Sysml.js" />
 				<file name="Sidebar-Veeam.js" />
+				<file name="Sidebar-WebIcons.js" />
 			</sources>
 		</jscomp>
 
@@ -305,16 +306,13 @@
 				<file name="Graph-Stylesheet.js" />
 			</sources>
 
-			<sources dir="${war.dir}/js/dropbox">
-				<file name="dropbox.min.js" />
-			</sources>
-
 			<sources dir="${war.dir}/js/diagramly/util">
 				<file name="mxAsyncCanvas.js" />
 				<file name="mxJsCanvas.js" />
 			</sources>
 
 			<sources dir="${war.dir}/js/diagramly">
+				<file name="DrawioClient.js" />
 				<file name="DrawioUser.js" />
 				<file name="UrlLibrary.js" />
 				<file name="DriveRealtime.js" />
@@ -328,6 +326,9 @@
 				<file name="OneDriveFile.js" />
 				<file name="OneDriveLibrary.js" />
 				<file name="OneDriveClient.js" />
+				<file name="GitHubFile.js" />
+				<file name="GitHubLibrary.js" />
+				<file name="GitHubClient.js" />
 				<file name="ChatWindow.js" />
 			</sources>
 			

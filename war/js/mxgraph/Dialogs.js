@@ -944,9 +944,9 @@ PageSetupDialog.getFormats = function()
 /**
  * Constructs a new print dialog.
  */
-var PrintDialog = function(editorUi)
+var PrintDialog = function(editorUi, title)
 {
-	this.create(editorUi);
+	this.create(editorUi, title);
 };
 
 /**
@@ -1231,7 +1231,7 @@ PrintDialog.createPrintPreview = function(graph, scale, pf, border, x0, y0, auto
 /**
  * Constructs a new filename dialog.
  */
-var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validateFn, content, helpLink, closeOnBtn)
+var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validateFn, content, helpLink, closeOnBtn, cancelFn)
 {
 	closeOnBtn = (closeOnBtn != null) ? closeOnBtn : true;
 	var row, td;
@@ -1243,6 +1243,7 @@ var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validat
 	row = document.createElement('tr');
 	
 	td = document.createElement('td');
+	td.style.whiteSpace = 'nowrap';
 	td.style.fontSize = '10pt';
 	td.style.width = '120px';
 	mxUtils.write(td, (label || mxResources.get('filename')) + ':');
@@ -1251,6 +1252,7 @@ var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validat
 	
 	var nameInput = document.createElement('input');
 	nameInput.setAttribute('value', filename || '');
+	nameInput.style.marginLeft = '4px';
 	nameInput.style.width = '180px';
 	
 	var genericBtn = mxUtils.button(buttonText, function()
@@ -1367,6 +1369,11 @@ var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validat
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 	{
 		editorUi.hideDialog();
+		
+		if (cancelFn != null)
+		{
+			cancelFn();
+		}
 	});
 	cancelBtn.className = 'geBtn';
 	
@@ -1411,7 +1418,7 @@ var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validat
 /**
  * Constructs a new textarea dialog.
  */
-var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w, h, addButtons, noHide)
+var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w, h, addButtons, noHide, noWrap, applyTitle)
 {
 	w = (w != null) ? w : 300;
 	h = (h != null) ? h : 120;
@@ -1435,6 +1442,12 @@ var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w
 	td = document.createElement('td');
 
 	var nameInput = document.createElement('textarea');
+	
+	if (noWrap)
+	{
+		nameInput.setAttribute('wrap', 'off');
+	}
+	
 	mxUtils.write(nameInput, url || '');
 	nameInput.style.resize = 'none';
 	nameInput.style.width = w + 'px';
@@ -1482,7 +1495,7 @@ var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w
 	
 	if (fn != null)
 	{
-		var genericBtn = mxUtils.button(mxResources.get('apply'), function()
+		var genericBtn = mxUtils.button(applyTitle || mxResources.get('apply'), function()
 		{
 			if (!noHide)
 			{
@@ -1704,6 +1717,7 @@ var ExportDialog = function(editorUi)
 	
 	var table = document.createElement('table');
 	var tbody = document.createElement('tbody');
+	table.setAttribute('cellpadding', (mxClient.IS_SF) ? '0' : '2');
 	
 	row = document.createElement('tr');
 	
@@ -1777,33 +1791,26 @@ var ExportDialog = function(editorUi)
 	row.appendChild(td);
 	
 	tbody.appendChild(row);
-
-	row = document.createElement('tr');
 	
+	row = document.createElement('tr');
+
 	td = document.createElement('td');
 	td.style.fontSize = '10pt';
-	mxUtils.write(td, mxResources.get('backgroundColor') + ':');
+	mxUtils.write(td, mxResources.get('zoom') + ' (%):');
 	
 	row.appendChild(td);
 	
-	var backgroundInput = document.createElement('input');
-	var tmp = (graph.background == null || graph.background == mxConstants.NONE) ? '#ffffff' : graph.background;
-	backgroundInput.setAttribute('value', tmp);
-	backgroundInput.style.width = '80px';
-
-	var backgroundCheckbox = document.createElement('input');
-	backgroundCheckbox.setAttribute('type', 'checkbox');
-	backgroundCheckbox.checked = graph.background == null || graph.background == mxConstants.NONE;
+	var zoomInput = document.createElement('input');
+	zoomInput.setAttribute('type', 'number');
+	zoomInput.setAttribute('value', '100');
+	zoomInput.style.width = '180px';
 
 	td = document.createElement('td');
-	td.appendChild(backgroundInput);
-	td.appendChild(backgroundCheckbox);
-	mxUtils.write(td, mxResources.get('transparent'));
-	
+	td.appendChild(zoomInput);
 	row.appendChild(td);
-	
+
 	tbody.appendChild(row);
-	
+
 	row = document.createElement('tr');
 
 	td = document.createElement('td');
@@ -1839,7 +1846,27 @@ var ExportDialog = function(editorUi)
 	row.appendChild(td);
 
 	tbody.appendChild(row);
+	
+	row = document.createElement('tr');
+	
+	td = document.createElement('td');
+	td.style.fontSize = '10pt';
+	mxUtils.write(td, mxResources.get('background') + ':');
+	
+	row.appendChild(td);
+	
+	var transparentCheckbox = document.createElement('input');
+	transparentCheckbox.setAttribute('type', 'checkbox');
+	transparentCheckbox.checked = graph.background == null || graph.background == mxConstants.NONE;
 
+	td = document.createElement('td');
+	td.appendChild(transparentCheckbox);
+	mxUtils.write(td, mxResources.get('transparent'));
+	
+	row.appendChild(td);
+	
+	tbody.appendChild(row);
+	
 	row = document.createElement('tr');
 
 	td = document.createElement('td');
@@ -1849,9 +1876,9 @@ var ExportDialog = function(editorUi)
 	row.appendChild(td);
 	
 	var borderInput = document.createElement('input');
-	borderInput.setAttribute('value', width);
+	borderInput.setAttribute('type', 'number');
+	borderInput.setAttribute('value', ExportDialog.lastBorderValue);
 	borderInput.style.width = '180px';
-	borderInput.value = '0';
 
 	td = document.createElement('td');
 	td.appendChild(borderInput);
@@ -1877,12 +1904,14 @@ var ExportDialog = function(editorUi)
 		
 		if (imageFormatSelect.value === 'xml')
 		{
+			zoomInput.setAttribute('disabled', 'true');
 			widthInput.setAttribute('disabled', 'true');
 			heightInput.setAttribute('disabled', 'true');
 			borderInput.setAttribute('disabled', 'true');
 		}
 		else
 		{
+			zoomInput.removeAttribute('disabled');
 			widthInput.removeAttribute('disabled');
 			heightInput.removeAttribute('disabled');
 			borderInput.removeAttribute('disabled');
@@ -1890,17 +1919,17 @@ var ExportDialog = function(editorUi)
 		
 		if (imageFormatSelect.value === 'png' || imageFormatSelect.value === 'svg')
 		{
-			backgroundCheckbox.removeAttribute('disabled');
+			transparentCheckbox.removeAttribute('disabled');
 		}
 		else
 		{
-			backgroundCheckbox.setAttribute('disabled', 'disabled');
+			transparentCheckbox.setAttribute('disabled', 'disabled');
 		}
 	};
 	
 	mxEvent.addListener(imageFormatSelect, 'change', formatChanged);
 	formatChanged();
-	
+
 	function checkValues()
 	{
 		if (widthInput.value * heightInput.value > MAX_AREA || widthInput.value <= 0)
@@ -1922,15 +1951,40 @@ var ExportDialog = function(editorUi)
 		}
 	};
 
-	mxEvent.addListener(widthInput, 'change', function()
+	mxEvent.addListener(zoomInput, 'change', function()
 	{
+		var s = Math.max(0, parseFloat(zoomInput.value) || 100) / 100;
+		zoomInput.value = parseFloat((s * 100).toFixed(2));
+		
 		if (width > 0)
 		{
-			heightInput.value = Math.ceil(parseInt(widthInput.value) * height / width);
+			widthInput.value = Math.floor(width * s);
+			heightInput.value = Math.floor(height * s);
 		}
 		else
 		{
-			heightInput.value = '0';
+			zoomInput.value = '100';
+			widthInput.value = width;
+			heightInput.value = height;
+		}
+		
+		checkValues();
+	});
+
+	mxEvent.addListener(widthInput, 'change', function()
+	{
+		var s = parseInt(widthInput.value) / width;
+		
+		if (s > 0)
+		{
+			zoomInput.value = parseFloat((s * 100).toFixed(2));
+			heightInput.value = Math.floor(height * s);
+		}
+		else
+		{
+			zoomInput.value = '100';
+			widthInput.value = width;
+			heightInput.value = height;
 		}
 		
 		checkValues();
@@ -1938,140 +1992,54 @@ var ExportDialog = function(editorUi)
 
 	mxEvent.addListener(heightInput, 'change', function()
 	{
-		if (height > 0)
+		var s = parseInt(heightInput.value) / height;
+		
+		if (s > 0)
 		{
-			widthInput.value = Math.ceil(parseInt(heightInput.value) * width / height);
+			zoomInput.value = parseFloat((s * 100).toFixed(2));
+			widthInput.value = Math.floor(width * s);
 		}
 		else
 		{
-			widthInput.value = '0';
+			zoomInput.value = '100';
+			widthInput.value = width;
+			heightInput.value = height;
 		}
 		
 		checkValues();
 	});
-
-	// Resuable image export instance
-	var imgExport = new mxImageExport();
 	
-	function getSvg()
-	{
-		var b = Math.max(0, parseInt(borderInput.value)) + 1;
-		var scale = parseInt(widthInput.value) / width;
-		var bg = null;
-	    
-		if (backgroundInput.value != '' && backgroundInput.value != mxConstants.NONE && !backgroundCheckbox.checked)
-		{
-			bg = backgroundInput.value;
-		}
-		
-		return graph.getSvg(bg, scale, b);
-	};
-	
-	function getXml()
-	{
-		return mxUtils.getXml(editorUi.editor.getGraphXml());
-	};
-
 	row = document.createElement('tr');
 	td = document.createElement('td');
 	td.setAttribute('align', 'right');
-	td.style.paddingTop = '24px';
+	td.style.paddingTop = '22px';
 	td.colSpan = 2;
 	
 	var saveBtn = mxUtils.button(mxResources.get('export'), mxUtils.bind(this, function()
 	{
-		if (parseInt(widthInput.value) <= 0 && parseInt(heightInput.value) <= 0)
+		if (parseInt(zoomInput.value) <= 0)
 		{
 			mxUtils.alert(mxResources.get('drawingEmpty'));
 		}
 		else
 		{
-			var format = imageFormatSelect.value;
 	    	var name = nameInput.value;
-	    	
-	        if (format == 'xml')
-	    	{
-				editorUi.hideDialog();
-	        	ExportDialog.saveLocalFile(getXml(), name, format);
-	    	}
-	        else if (format == 'svg')
-	    	{
-	        	var xml = mxUtils.getXml(getSvg());
-				
-				if (xml.length < MAX_REQUEST_SIZE)
-				{
-					editorUi.hideDialog();
-					ExportDialog.saveLocalFile(xml, name, format);
-				}
-				else
-				{
-					mxUtils.alert(mxResources.get('drawingTooLarge'));
-					mxUtils.popup(xml);
-				}
-	    	}
-	        else
-	        {
-	        	var param = null;
-	        	var w = parseInt(widthInput.value) || 0;
-	        	var h = parseInt(heightInput.value) || 0;
-				var b = Math.max(0, parseInt(borderInput.value)) + 1;
-	        	
-	        	var exp = ExportDialog.getExportParameter(editorUi, format);
-	        	
-	        	if (typeof exp == 'function')
-	        	{
-	        		param = exp();
-	        	}
-	        	else
-	        	{
-					var scale = parseInt(widthInput.value) / width;
-					var bounds = graph.getGraphBounds();
-					var vs = graph.view.scale;
-					
-		        	// New image export
-					var xmlDoc = mxUtils.createXmlDocument();
-					var root = xmlDoc.createElement('output');
-					xmlDoc.appendChild(root);
-					
-				    // Renders graph. Offset will be multiplied with state's scale when painting state.
-					var xmlCanvas = new mxXmlCanvas2D(root);
-					xmlCanvas.translate(Math.floor((b / scale - bounds.x) / vs), Math.floor((b / scale - bounds.y) / vs));
-					xmlCanvas.scale(scale / vs);
-				    imgExport.drawState(graph.getView().getState(graph.model.root), xmlCanvas);
-				    
-					// Puts request data together
-					w = Math.ceil(bounds.width * scale / vs + 2 * b);
-					h = Math.ceil(bounds.height * scale / vs + 2 * b);
-					param = 'xml=' + encodeURIComponent(mxUtils.getXml(root));
-	        	}
-	
-				// Requests image if request is valid
-				if (param != null && param.length <= MAX_REQUEST_SIZE && w * h < MAX_AREA)
-				{
-					var bg = '&bg=none';
-					
-					if (backgroundInput.value != '' && backgroundInput.value != mxConstants.NONE &&
-						(format != 'png' || !backgroundCheckbox.checked))
-					{
-						bg = '&bg=' + backgroundInput.value;
-					}
-					
-					editorUi.hideDialog();
-					var data = decodeURIComponent(param.substring(param.indexOf('=') + 1));
-					ExportDialog.saveRequest(data, name, format,
-						function(newTitle, base64)
-						{
-							// Base64 not used in this example
-							return new mxXmlRequest(EXPORT_URL, 'format=' + format + '&base64=' + (base64 || '0') +
-								((newTitle != null) ? '&filename=' + encodeURIComponent(newTitle) : '') +
-								bg + '&w=' + w + '&h=' + h + '&border=' + b + '&' + param);
-						});
-				}
-				else
-				{
-					mxUtils.alert(mxResources.get('drawingTooLarge'));
-				}
-	    	}
+			var format = imageFormatSelect.value;
+	    	var s = Math.max(0, parseFloat(zoomInput.value) || 100) / 100;
+			var b = Math.max(0, parseInt(borderInput.value));
+			var bg = graph.background;
+			
+			if ((format == 'svg' || format == 'png') && transparentCheckbox.checked)
+			{
+				bg = null;
+			}
+			else if (bg == null || bg == mxConstants.NONE)
+			{
+				bg = '#ffffff';
+			}
+			
+			ExportDialog.lastBorderValue = b;
+			ExportDialog.exportFile(editorUi, name, format, bg, s, b);
 		}
 	}));
 	saveBtn.className = 'geBtn gePrimaryBtn';
@@ -2100,6 +2068,11 @@ var ExportDialog = function(editorUi)
 };
 
 /**
+ * Remembers last value for border.
+ */
+ExportDialog.lastBorderValue = 0;
+
+/**
  * Global switches for the export dialog.
  */
 ExportDialog.showGifOption = true;
@@ -2115,10 +2088,56 @@ ExportDialog.showXmlOption = true;
  * parameter and value to be used in the request in the form
  * key=value, where value should be URL encoded.
  */
-ExportDialog.saveLocalFile = function(data, filename, format)
+ExportDialog.exportFile = function(editorUi, name, format, bg, s, b)
 {
-	new mxXmlRequest(SAVE_URL, 'xml=' + encodeURIComponent(data) + '&filename=' +
-		encodeURIComponent(filename) + '&format=' + format).simulate(document, '_blank');
+	var graph = editorUi.editor.graph;
+	
+	if (format == 'xml')
+	{
+    	ExportDialog.saveLocalFile(editorUi, mxUtils.getXml(editorUi.editor.getGraphXml()), name, format);
+	}
+    else if (format == 'svg')
+	{
+		ExportDialog.saveLocalFile(editorUi, mxUtils.getXml(graph.getSvg(bg, s, b)), name, format);
+	}
+    else
+    {
+    	var bounds = graph.getGraphBounds();
+    	
+		// New image export
+		var xmlDoc = mxUtils.createXmlDocument();
+		var root = xmlDoc.createElement('output');
+		xmlDoc.appendChild(root);
+		
+	    // Renders graph. Offset will be multiplied with state's scale when painting state.
+		var xmlCanvas = new mxXmlCanvas2D(root);
+		xmlCanvas.translate(Math.floor((b / s - bounds.x) / graph.view.scale),
+			Math.floor((b / s - bounds.y) / graph.view.scale));
+		xmlCanvas.scale(s / graph.view.scale);
+		
+		var imgExport = new mxImageExport()
+	    imgExport.drawState(graph.getView().getState(graph.model.root), xmlCanvas);
+	    
+		// Puts request data together
+		var param = 'xml=' + encodeURIComponent(mxUtils.getXml(root));
+		var w = Math.ceil(bounds.width * s / graph.view.scale + 2 * b);
+		var h = Math.ceil(bounds.height * s / graph.view.scale + 2 * b);
+		
+		// Requests image if request is valid
+		if (param.length <= MAX_REQUEST_SIZE && w * h < MAX_AREA)
+		{
+			editorUi.hideDialog();
+			var req = new mxXmlRequest(EXPORT_URL, 'format=' + format +
+				'&filename=' + encodeURIComponent(name) +
+				'&bg=' + ((bg != null) ? bg : 'none') +
+				'&w=' + w + '&h=' + h + '&' + param);
+			req.simulate(document, '_blank');
+		}
+		else
+		{
+			mxUtils.alert(mxResources.get('drawingTooLarge'));
+		}
+	}
 };
 
 /**
@@ -2127,20 +2146,20 @@ ExportDialog.saveLocalFile = function(data, filename, format)
  * parameter and value to be used in the request in the form
  * key=value, where value should be URL encoded.
  */
-ExportDialog.saveRequest = function(data, filename, format, fn)
+ExportDialog.saveLocalFile = function(editorUi, data, filename, format)
 {
-	fn(filename).simulate(document, '_blank');
-};
-
-/**
- * Hook for getting the export format. Returns null for the default
- * intermediate XML export format or a function that returns the
- * parameter and value to be used in the request in the form
- * key=value, where value should be URL encoded.
- */
-ExportDialog.getExportParameter = function(ui, format)
-{
-	return null;
+	if (data.length < MAX_REQUEST_SIZE)
+	{
+		editorUi.hideDialog();
+		var req = new mxXmlRequest(SAVE_URL, 'xml=' + encodeURIComponent(data) + '&filename=' +
+			encodeURIComponent(filename) + '&format=' + format);
+		req.simulate(document, '_blank');
+	}
+	else
+	{
+		mxUtils.alert(mxResources.get('drawingTooLarge'));
+		mxUtils.popup(xml);
+	}
 };
 
 /**
@@ -3032,13 +3051,13 @@ var LayersWindow = function(editorUi, x, y, w, h)
 			
 			mxEvent.addListener(ldiv, 'dragend', function(evt)
 			{
-				if (dragSource != null)
+				if (dragSource != null && dropIndex != null)
 				{
 					graph.addCell(child, graph.model.root, dropIndex);
-					dragSource = null;
-					dropIndex = null;
 				}
-				
+
+				dragSource = null;
+				dropIndex = null;
 				evt.stopPropagation();
 				evt.preventDefault();
 			});

@@ -1,14 +1,6 @@
 /**
- * Copyright (c) 2006-2016, JGraph Ltd
- * Copyright (c) 2006-2016, Gaudenz Alder
- */
-/**
- * Constructs a new point for the optional x and y coordinates. If no
- * coordinates are given, then the default values for <x> and <y> are used.
- * @constructor
- * @class Implements a basic 2D point. Known subclassers = {@link mxRectangle}.
- * @param {number} x X-coordinate of the point.
- * @param {number} y Y-coordinate of the point.
+ * Copyright (c) 2006-2017, JGraph Ltd
+ * Copyright (c) 2006-2017, Gaudenz Alder
  */
 DriveClient = function(editorUi)
 {
@@ -167,22 +159,24 @@ DriveClient.prototype.getUser = function()
  */
 DriveClient.prototype.setUserId = function(userId, remember)
 {
-	if (typeof(Storage) != 'undefined')
+	if (remember)
 	{
-		try
+		if (isLocalStorage)
 		{
-			sessionStorage.setItem('GUID', userId);
-			
-			if (remember)
+			localStorage.setItem('.guid', userId);
+		}
+		else if (typeof(Storage) != 'undefined')
+		{
+			try
 			{
 				var expiry = new Date();
 				expiry.setYear(expiry.getFullYear() + 1);
 				document.cookie = 'GUID=' + userId + '; expires=' + expiry.toUTCString();
 			}
-		}
-		catch (e)
-		{
-			// any errors for storing the user ID can be safely ignored
+			catch (e)
+			{
+				// any errors for storing the user ID can be safely ignored
+			}
 		}
 	}
 };
@@ -192,10 +186,12 @@ DriveClient.prototype.setUserId = function(userId, remember)
  */
 DriveClient.prototype.clearUserId = function()
 {
-	if (typeof(Storage) != 'undefined')
+	if (isLocalStorage)
 	{
-		sessionStorage.removeItem('GUID');
-
+		localStorage.removeItem('.guid');
+	}
+	else if (typeof(Storage) != 'undefined')
+	{
 		var expiry = new Date();
 		expiry.setYear(expiry.getFullYear() - 1);
 		document.cookie = 'GUID=; expires=' + expiry.toUTCString();
@@ -213,29 +209,35 @@ DriveClient.prototype.getUserId = function()
 	{
 		uid = this.user.id;
 	}
-
-	if (typeof(Storage) != 'undefined')
+	
+	if (uid == null && isLocalStorage)
 	{
-		if (uid == null)
+		uid = localStorage.getItem('.guid');
+	}
+	
+	if (uid == null	&& typeof(Storage) != 'undefined')
+	{
+		var cookies = document.cookie.split(";");
+		
+		for (var i = 0; i < cookies.length; i++)
 		{
-			uid = sessionStorage.getItem('GUID');
+			// Removes spaces around cookie
+			var cookie = mxUtils.trim(cookies[i]);
+			
+			if (cookie.substring(0, 5) == 'GUID=')
+			{
+				uid = cookie.substring(5);
+				break;
+			}
 		}
 		
-		if (uid == null)
+		if (uid != null && isLocalStorage)
 		{
-			var cookies = document.cookie.split(";");
-			
-			for (var i = 0; i < cookies.length; i++)
-			{
-				// Removes spaces around cookie
-				var cookie = mxUtils.trim(cookies[i]);
-				
-				if (cookie.substring(0, 5) == 'GUID=')
-				{
-					uid = cookie.substring(5);
-					break;
-				}
-			}
+			// Moves to local storage
+			var expiry = new Date();
+			expiry.setYear(expiry.getFullYear() - 1);
+			document.cookie = 'GUID=; expires=' + expiry.toUTCString();
+			localStorage.setItem('.guid', uid);
 		}
 	}
 	
@@ -610,40 +612,6 @@ DriveClient.prototype.getLibrary = function(id, success, error)
  * readXml argument is used for import. Default is false. The optional
  * readLibrary argument is used for reading libraries. Default is false.
  */
-DriveClient.prototype.convertFile = function(resp, success, error)
-{
-	var name = resp.title;
-	name = name.substring(0, name.lastIndexOf('.')) + this.extension;
-	
-	// Gets file data
-	var token = gapi.auth.getToken().access_token;
-	var url = resp.downloadUrl + '&access_token=' + token;
-	
-	this.ui.loadUrl(url, mxUtils.bind(this, function(data)
-	{
-		this.ui.parseFile(new Blob([data], {type: 'application/octet-stream'}), mxUtils.bind(this, function(xhr)
-		{
-			if (xhr.readyState == 4)
-			{
-				if (xhr.status == 200 && xhr.responseText.substring(0, 13) == '<mxGraphModel')
-				{
-					this.insertFile(name, xhr.responseText, (resp.parents != null && resp.parents.length > 0) ?
-						resp.parents[0].id : null, success, error);
-				}
-				else if (error != null)
-				{
-					error({message: mxResources.get('errorLoadingFile')});
-				}
-			}
-		}), resp.title);
-	}));
-};
-
-/**
- * Checks if the client is authorized and calls the next step. The optional
- * readXml argument is used for import. Default is false. The optional
- * readLibrary argument is used for reading libraries. Default is false.
- */
 DriveClient.prototype.getFile = function(id, success, error, readXml, readLibrary)
 {
 	readXml = (readXml != null) ? readXml : false;
@@ -662,11 +630,11 @@ DriveClient.prototype.getFile = function(id, success, error, readXml, readLibrar
 		{
 			if (this.user != null)
 			{
-				// Handles .vsdx and Gliffy files by creating a new file
-				if (!readLibrary && !readXml && Graph.fileSupport && new XMLHttpRequest().upload &&
-					(/(\.vsdx)$/i.test(resp.title) || /(\.gliffy)$/i.test(resp.title)))
+				// Handles .vsdx, Gliffy and PNG+XML files by creating a temporary file
+				if ((/\.vsdx$/i.test(resp.title) || /\.gliffy$/i.test(resp.title) || /\.png$/i.test(resp.title)))
 				{
-					this.convertFile(resp, success, error);
+					var url = resp.downloadUrl + '&access_token=' + gapi.auth.getToken().access_token;
+					this.ui.convertFile(url, resp.title, resp.mimeType, this.extension, success, error);
 				}
 				else
 				{
@@ -715,7 +683,9 @@ DriveClient.prototype.getFile = function(id, success, error, readXml, readLibrar
 DriveClient.prototype.loadRealtime = function(resp, success, error)
 {
 	// Redirects to new app because the realtime models of different apps are not visible
-	if (urlParams['ignoremime'] != '1' && this.appId == '420247213240' && (resp.mimeType == 'application/mxr' || resp.mimeType == 'application/vnd.jgraph.mxfile.realtime'))
+	if (urlParams['ignoremime'] != '1' && this.appId == '420247213240' &&
+		(resp.mimeType == 'application/vnd.jgraph.mxfile.realtime' ||
+		resp.mimeType == 'application/mxr'))
 	{
 		this.redirectToNewApp(error, resp.id);
 	}
@@ -801,7 +771,8 @@ DriveClient.prototype.getXmlFile = function(resp, doc, success, error, ignoreMim
 				success(file);
 			}
 		}
-	}), error, resp.mimeType == 'image/png');
+	}), error, (resp.mimeType.substring(0, 6) == 'image/' && resp.mimeType.substring(0, 9) != 'image/svg') ||
+		/\.png$/i.test(resp.title) || /\.jpe?g$/i.test(resp.title));
 };
 
 /**
@@ -1185,6 +1156,12 @@ DriveClient.prototype.pickFile = function(fn, acceptAllFiles)
 				{
 					view.setMimeTypes(this.mimeTypes);
 					view2.setMimeTypes(this.mimeTypes);
+				}
+				else
+				{
+					// Workaround for no files shown
+					view.setMimeTypes(this.mimeTypes + ',image/png,image/jpg,image/svg+xml,' +
+						'application/xml,text/plain,text/html');
 				}
 				
 				this[name] = new google.picker.PickerBuilder()
